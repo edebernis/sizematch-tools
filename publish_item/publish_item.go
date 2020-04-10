@@ -8,20 +8,30 @@ import (
 
 var exchangeName = "sizematch-items"
 
+/* Parser configuration
+var routingKey = "items.parse.ikea"
+var queueName = "sizematch-item-parser-ikea"
+*/
 /* Normalizer configuration
 var routingKey = "items.normalize"
 var queueName = "sizematch-item-normalizer"
-var appID = "sizematch-item-normalizer"
 */
 /* Saver configuration */
 var routingKey = "items.save"
 var queueName = "sizematch-item-saver"
-var appID = "sizematch-item-saver"
 
-var item = items.Item{
+var unparsedItem = items.Item{
+    Source: "ikea",
+    Lang:   items.Lang_EN,
+    Urls: []string{
+        "https://www.ikea.com/gb/en/p/leifarne-swivel-chair-dark-yellow-balsberget-white-s29301700/",
+    },
+}
+
+var parsedItem = items.Item{
     Id:     "123",
     Source: "ikea",
-    Lang:   "en",
+    Lang:   items.Lang_EN,
     Urls: []string{
         "https://www.ikea.com/gb/en/p/leifarne-swivel-chair-dark-yellow-balsberget-white-s29301700/",
     },
@@ -90,7 +100,7 @@ var normalizedItem = items.NormalizedItem{
         },
     },
     Price: &items.Price{
-        Price:    31.0,
+        Amount:   39,
         Currency: items.Price_GBP,
     },
 }
@@ -130,7 +140,7 @@ func main() {
 
     msg := amqp.Publishing{
         ContentType: "application/protobuf",
-        AppId:       appID,
+        AppId:       "sizematch-tool-publish-item",
         Body:        body,
     }
 
