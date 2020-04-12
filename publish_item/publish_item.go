@@ -8,23 +8,24 @@ import (
 
 var exchangeName = "sizematch-items"
 
-/* Parser configuration
+/* Parser configuration */
 var routingKey = "items.parse.ikea"
 var queueName = "sizematch-item-parser-ikea"
-*/
+
 /* Normalizer configuration
 var routingKey = "items.normalize"
 var queueName = "sizematch-item-normalizer"
 */
-/* Saver configuration */
+/* Saver configuration
 var routingKey = "items.save"
 var queueName = "sizematch-item-saver"
+*/
 
 var unparsedItem = items.Item{
     Source: "ikea",
-    Lang:   items.Lang_EN,
+    Lang:   items.Lang_FR,
     Urls: []string{
-        "https://www.ikea.com/gb/en/p/leifarne-swivel-chair-dark-yellow-balsberget-white-s29301700/",
+        "https://www.ikea.com/fr/fr/p/aptitlig-planche-a-decouper-bambou-80233430",
     },
 }
 
@@ -133,7 +134,7 @@ func main() {
         panic("could not bind queue: " + err.Error())
     }
 
-    body, err := proto.Marshal(&normalizedItem)
+    body, err := proto.Marshal(&unparsedItem)
     if err != nil {
         panic("could not marshal item: " + err.Error())
     }
