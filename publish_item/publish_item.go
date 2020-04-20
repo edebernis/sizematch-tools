@@ -1,25 +1,39 @@
 package main
 
 import (
-    "github.com/edebernis/sizematch-protobuf/build/go/items"
+    "fmt"
+    "github.com/edebernis/sizematch-protobuf/go/items"
     "github.com/golang/protobuf/proto"
     "github.com/streadway/amqp"
+    "google.golang.org/protobuf/runtime/protoiface"
+    "os"
 )
 
 var exchangeName = "sizematch-items"
 
-/* Parser configuration */
-var routingKey = "items.parse.ikea"
-var queueName = "sizematch-item-parser-ikea"
+type serviceConfig struct {
+    routingKey string
+    queueName  string
+    item       protoiface.MessageV1
+}
 
-/* Normalizer configuration
-var routingKey = "items.normalize"
-var queueName = "sizematch-item-normalizer"
-*/
-/* Saver configuration
-var routingKey = "items.save"
-var queueName = "sizematch-item-saver"
-*/
+var serviceConfigs = map[string]serviceConfig{
+    "parser": {
+        routingKey: "items.parse.ikea",
+        queueName:  "sizematch-item-parser-ikea",
+        item:       &unparsedItem,
+    },
+    "normalizer": {
+        routingKey: "items.normalize",
+        queueName:  "sizematch-item-normalizer",
+        item:       &parsedItem,
+    },
+    "saver": {
+        routingKey: "items.save",
+        queueName:  "sizematch-item-saver",
+        item:       &normalizedItem,
+    },
+}
 
 var unparsedItem = items.Item{
     Source: "ikea",
@@ -107,6 +121,13 @@ var normalizedItem = items.NormalizedItem{
 }
 
 func main() {
+    if len(os.Args) <= 1 {
+        fmt.Printf("USAGE : %s <sizematch_service> \n", os.Args[0])
+        os.Exit(0)
+    }
+
+    config := serviceConfigs[os.Args[1]]
+
     connection, err := amqp.Dial("amqp://user:password@localhost:5672/")
     if err != nil {
         panic("could not connect to RabbitMQ: " + err.Error())
@@ -124,17 +145,17 @@ func main() {
         panic("could not declare exchange: " + err.Error())
     }
 
-    _, err = channel.QueueDeclare(queueName, false, false, false, false, nil)
+    _, err = channel.QueueDeclare(config.queueName, false, false, false, false, nil)
     if err != nil {
         panic("could not declare queue: " + err.Error())
     }
 
-    err = channel.QueueBind(queueName, routingKey, exchangeName, false, nil)
+    err = channel.QueueBind(config.queueName, config.routingKey, exchangeName, false, nil)
     if err != nil {
         panic("could not bind queue: " + err.Error())
     }
 
-    body, err := proto.Marshal(&unparsedItem)
+    body, err := proto.Marshal(config.item)
     if err != nil {
         panic("could not marshal item: " + err.Error())
     }
@@ -145,7 +166,7 @@ func main() {
         Body:        body,
     }
 
-    err = channel.Publish(exchangeName, routingKey, true, false, msg)
+    err = channel.Publish(exchangeName, config.routingKey, true, false, msg)
     if err != nil {
         panic("could not publish item: " + err.Error())
     }
