@@ -19,8 +19,8 @@ type serviceConfig struct {
 
 var serviceConfigs = map[string]serviceConfig{
     "parser": {
-        routingKey: "items.parse.ikea",
-        queueName:  "sizematch-item-parser-ikea",
+        routingKey: "items.parse.laredoute",
+        queueName:  "sizematch-item-parser-laredoute",
         item:       &unparsedItem,
     },
     "normalizer": {
@@ -36,16 +36,17 @@ var serviceConfigs = map[string]serviceConfig{
 }
 
 var unparsedItem = items.Item{
-    Source: "ikea",
+    Source: "laredoute",
     Lang:   items.Lang_FR,
     Urls: []string{
-        "https://www.ikea.com/fr/fr/p/aptitlig-planche-a-decouper-bambou-80233430",
+        "https://www.laredoute.fr/ppdp/prod-500995383.aspx",
     },
 }
 
 var parsedItem = items.Item{
     Id:     "123",
     Source: "ikea",
+    Brand:  "IKEA",
     Lang:   items.Lang_EN,
     Urls: []string{
         "https://www.ikea.com/gb/en/p/leifarne-swivel-chair-dark-yellow-balsberget-white-s29301700/",
@@ -80,6 +81,7 @@ var parsedItem = items.Item{
 var normalizedItem = items.NormalizedItem{
     Id:     "123",
     Source: "ikea",
+    Brand:  "ikea",
     Lang:   items.Lang_EN,
     Urls: []string{
         "https://www.ikea.com/gb/en/p/leifarne-swivel-chair-dark-yellow-balsberget-white-s29301700/",
