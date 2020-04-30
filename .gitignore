@@ -1,5 +1,5 @@
-publish_item
-consume_item
+publish_item/publish_item
+consume_item/consume_item
 
 # Binaries for programs and plugins
 *.exe
