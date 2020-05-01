@@ -7,6 +7,7 @@ import (
     "github.com/streadway/amqp"
     "os"
     "strconv"
+    "strings"
     "time"
 )
 
@@ -14,21 +15,21 @@ type serviceConfig struct {
     queueName string
 }
 
-var serviceConfigs = map[string]serviceConfig{
+var serviceConfigs = map[string]*serviceConfig{
     "parser": {
-        queueName: "sizematch-item-parser-ikea",
+        queueName: "sizematch-items-parser",
     },
     "normalizer": {
-        queueName: "sizematch-item-normalizer",
+        queueName: "sizematch-items-normalizer",
     },
     "saver": {
-        queueName: "sizematch-item-saver",
+        queueName: "sizematch-items-saver",
     },
 }
 
 func main() {
     if len(os.Args) < 2 {
-        fmt.Printf("USAGE : %s <sizematch_service> [requeue] \n", os.Args[0])
+        fmt.Printf("USAGE : %s <sizematch_service> [requeue] [source] \n", os.Args[0])
         os.Exit(0)
     }
 
@@ -36,11 +37,20 @@ func main() {
 
     requeue := true
     var err error
-    if len(os.Args) == 3 {
+    if len(os.Args) > 2 {
         requeue, err = strconv.ParseBool(os.Args[2])
         if err != nil {
             panic("Invalid requeue bool argument: " + err.Error())
         }
+    }
+
+    if len(os.Args) > 3 && os.Args[1] == "parser" {
+        source := os.Args[3]
+        queueName := strings.Join(
+            []string{serviceConfigs["parser"].queueName, source},
+            "-",
+        )
+        serviceConfigs["parser"].queueName = queueName
     }
 
     connection, err := amqp.Dial("amqp://user:password@localhost:5672/")
@@ -80,6 +90,7 @@ func main() {
             }
 
             fmt.Printf("%+v\n", item)
+            return
         }
     }(requeue)
 
