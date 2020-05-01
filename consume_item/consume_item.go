@@ -49,7 +49,7 @@ func main() {
         }
     }
 
-    if len(os.Args) > 4 && os.Args[1] == "parser" {
+    if len(os.Args) > 4 && service == "parser" {
         source := os.Args[4]
         queueName := strings.Join(
             []string{serviceConfigs["parser"].queueName, source},

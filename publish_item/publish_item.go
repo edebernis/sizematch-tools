@@ -7,6 +7,7 @@ import (
     "github.com/streadway/amqp"
     "google.golang.org/protobuf/runtime/protoiface"
     "os"
+    "strings"
 )
 
 var exchangeName = "sizematch-items"
@@ -17,20 +18,20 @@ type serviceConfig struct {
     item       protoiface.MessageV1
 }
 
-var serviceConfigs = map[string]serviceConfig{
+var serviceConfigs = map[string]*serviceConfig{
     "parser": {
-        routingKey: "items.parse.laredoute",
-        queueName:  "sizematch-item-parser-laredoute",
+        routingKey: "items.parse",
+        queueName:  "sizematch-items-parser",
         item:       &unparsedItem,
     },
     "normalizer": {
         routingKey: "items.normalize",
-        queueName:  "sizematch-item-normalizer",
+        queueName:  "sizematch-items-normalizer",
         item:       &parsedItem,
     },
     "saver": {
         routingKey: "items.save",
-        queueName:  "sizematch-item-saver",
+        queueName:  "sizematch-items-saver",
         item:       &normalizedItem,
     },
 }
@@ -55,6 +56,9 @@ var parsedItem = items.Item{
     Description: "LEIFARNE Swivel chair - dark yellow, Balsberget white. You sit comfortably thanks to the restful flexibility of the scooped seat and shaped back. The self-adjusting plastic feet adds stability to the chair. A special surface treatment on the seat prevents you from sliding.",
     Categories: []string{
         "Dining chairs",
+    },
+    Colors: []string{
+        "White",
     },
     ImageUrls: []string{
         "https://www.ikea.com/gb/en/images/products/leifarne-swivel-chair__0742962_PE742882_S5.JPG",
@@ -81,7 +85,7 @@ var parsedItem = items.Item{
 var normalizedItem = items.NormalizedItem{
     Id:     "123",
     Source: "ikea",
-    Brand:  "ikea",
+    Brand:  "IKEA",
     Lang:   items.Lang_EN,
     Urls: []string{
         "https://www.ikea.com/gb/en/p/leifarne-swivel-chair-dark-yellow-balsberget-white-s29301700/",
@@ -90,6 +94,9 @@ var normalizedItem = items.NormalizedItem{
     Description: "LEIFARNE Swivel chair - dark yellow, Balsberget white. You sit comfortably thanks to the restful flexibility of the scooped seat and shaped back. The self-adjusting plastic feet adds stability to the chair. A special surface treatment on the seat prevents you from sliding.",
     Categories: []string{
         "Dining chairs",
+    },
+    Colors: []string{
+        "White",
     },
     ImageUrls: []string{
         "https://www.ikea.com/gb/en/images/products/leifarne-swivel-chair__0742962_PE742882_S5.JPG",
@@ -124,11 +131,26 @@ var normalizedItem = items.NormalizedItem{
 
 func main() {
     if len(os.Args) <= 1 {
-        fmt.Printf("USAGE : %s <sizematch_service> \n", os.Args[0])
+        fmt.Printf("USAGE : %s <sizematch_service> [source] \n", os.Args[0])
         os.Exit(0)
     }
 
-    config := serviceConfigs[os.Args[1]]
+    service := os.Args[1]
+    config := serviceConfigs[service]
+
+    if len(os.Args) > 2 && service == "parser" {
+        source := os.Args[2]
+        routingKey := strings.Join(
+            []string{serviceConfigs["parser"].routingKey, source},
+            ".",
+        )
+        queueName := strings.Join(
+            []string{serviceConfigs["parser"].queueName, source},
+            "-",
+        )
+        serviceConfigs["parser"].routingKey = routingKey
+        serviceConfigs["parser"].queueName = queueName
+    }
 
     connection, err := amqp.Dial("amqp://user:password@localhost:5672/")
     if err != nil {
