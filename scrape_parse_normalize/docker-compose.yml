@@ -1,0 +1,127 @@
+version: '3'
+services:
+  rabbitmq:
+    image: "rabbitmq:3.8-management-alpine"
+    ports:
+      - 5672:5672
+      - 8080:15672
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+
+# Scraper services
+  celery:
+    build: 
+      context: ../../sizematch-item-scrapers
+      args:
+        GITHUB_TOKEN: $GITHUB_TOKEN
+    depends_on:
+      - rabbitmq
+    command: celery -A main.celery worker -l info
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=user
+      - RABBITMQ_PASSWORD=password
+      - PUBLISHER_EXCHANGE_NAME=sizematch-items
+      - PUBLISHER_ROUTING_KEY_PREFIX=items.parse
+      - PUBLISHER_QUEUE_NAME_PREFIX=sizematch-items-parser
+      - SOURCES_DIRECTORY=/app/sources
+    volumes:
+      - ${PWD}/../../sizematch-sources:/app/sources
+  scraper:
+    build:
+      context: ../../sizematch-item-scrapers
+      args:
+        GITHUB_TOKEN: $GITHUB_TOKEN
+    depends_on:
+      - rabbitmq
+      - celery
+    ports:
+      - 8000:8000
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=user
+      - RABBITMQ_PASSWORD=password
+      - RABBITMQ_APP_ID=sizematch-items-scrapers
+      - PUBLISHER_EXCHANGE_NAME=sizematch-items
+      - PUBLISHER_ROUTING_KEY_PREFIX=items.parse
+      - PUBLISHER_QUEUE_NAME_PREFIX=sizematch-items-parser
+      - SOURCES_DIRECTORY=/app/sources
+    volumes:
+      - ${PWD}/../../sizematch-sources:/app/sources
+
+# Parser services
+  browserless:
+    image: browserless/chrome:1.29-puppeteer-2.1.1
+    ports:
+      - 3000:3000
+    restart: unless-stopped
+    environment:
+      - MAX_CONCURRENT_SESSIONS=2
+      - CONNECTION_TIMEOUT=30000
+      - MAX_QUEUE_LENGTH=2
+      - PREBOOT_CHROME=true
+      - KEEP_ALIVE=true
+      - WORKSPACE_DELETE_EXPIRED=true
+      - WORKSPACE_EXPIRE_DAYS=1
+      - ENABLE_DEBUGGER=false
+      - TOKEN=598ec0ed-da0b-4006-b132-47120c12ce83
+      - DEBUG=browserless/chrome*
+      - EXIT_ON_HEALTH_FAILURE=true
+      - DEFAULT_BLOCK_ADS=true
+      - DEFAULT_IGNORE_HTTPS_ERRORS=true
+  parser:
+    build:
+      context: ../../sizematch-item-parsers
+      args:
+        GITHUB_TOKEN: $GITHUB_TOKEN
+    depends_on:
+      - rabbitmq
+      - browserless
+    cap_add:
+      - SYS_ADMIN
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=user
+      - RABBITMQ_PASSWORD=password
+      - RABBITMQ_APP_ID=sizematch-item-parsers
+      - CONSUMER_QUEUE_NAME_PREFIX=sizematch-items-parser
+      - PREFETCH_COUNT=2
+      - SOURCE_NAME=laredoute
+      - SOURCES_DIRECTORY=/app/sources
+      - PUBLISHER_EXCHANGE_NAME=sizematch-items
+      - PUBLISHER_ROUTING_KEY=items.normalize
+      - PUBLISHER_QUEUE_NAME=sizematch-items-normalizer
+      - BROWSERLESS_HOST=browserless
+      - BROWSERLESS_PORT=3000
+      - BROWSERLESS_TOKEN=598ec0ed-da0b-4006-b132-47120c12ce83
+    volumes:
+      - ${PWD}/../../sizematch-sources:/app/sources
+
+# Normalizer services
+  normalizer:
+    build:
+      context: ../../sizematch-item-normalizer
+      args:
+        GITHUB_TOKEN: $GITHUB_TOKEN
+    depends_on:
+      - rabbitmq
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=user
+      - RABBITMQ_PASSWORD=password
+      - RABBITMQ_APP_ID=sizematch-items-normalizer
+      - CONSUMER_QUEUE_NAME=sizematch-items-normalizer
+      - PREFETCH_COUNT=2
+      - PUBLISHER_EXCHANGE_NAME=sizematch-items
+      - PUBLISHER_ROUTING_KEY=items.save
+      - PUBLISHER_QUEUE_NAME=sizematch-items-saver

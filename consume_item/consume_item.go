@@ -29,23 +29,28 @@ var serviceConfigs = map[string]*serviceConfig{
 
 func main() {
     if len(os.Args) < 2 {
-        fmt.Printf("USAGE : %s <sizematch_service> [requeue] [source] \n", os.Args[0])
+        fmt.Printf("USAGE : %s <sizematch_service> <quantity> [requeue] [source] \n", os.Args[0])
         os.Exit(0)
     }
 
-    config := serviceConfigs[os.Args[1]]
+    service := os.Args[1]
+    config := serviceConfigs[service]
+
+    quantity, err := strconv.Atoi(os.Args[2])
+    if err != nil {
+        panic("Invalid quantity integer argument: " + err.Error())
+    }
 
     requeue := true
-    var err error
-    if len(os.Args) > 2 {
-        requeue, err = strconv.ParseBool(os.Args[2])
+    if len(os.Args) > 3 {
+        requeue, err = strconv.ParseBool(os.Args[3])
         if err != nil {
             panic("Invalid requeue bool argument: " + err.Error())
         }
     }
 
-    if len(os.Args) > 3 && os.Args[1] == "parser" {
-        source := os.Args[3]
+    if len(os.Args) > 4 && os.Args[1] == "parser" {
+        source := os.Args[4]
         queueName := strings.Join(
             []string{serviceConfigs["parser"].queueName, source},
             "-",
@@ -65,7 +70,7 @@ func main() {
     }
     defer channel.Close()
 
-    err = channel.Qos(1, 0, false)
+    err = channel.Qos(quantity, 0, false)
     if err != nil {
         panic("could not set qos on channel: " + err.Error())
     }
@@ -75,24 +80,39 @@ func main() {
         panic("could not consume item: " + err.Error())
     }
 
-    go func(requeue bool) {
+    go func(service string, quantity int, requeue bool) {
+        consumedMsgs := []amqp.Delivery{}
         for msg := range msgs {
+            consumedMsgs = append(consumedMsgs, msg)
+            if len(consumedMsgs) == quantity {
+                break
+            }
+        }
 
+        for _, msg := range consumedMsgs {
             err := msg.Nack(false, requeue)
             if err != nil {
                 panic("could not nack message: " + err.Error())
             }
 
-            item := items.Item{}
-            err = proto.Unmarshal(msg.Body, &item)
-            if err != nil {
-                panic("could not unmarshal item: " + err.Error())
+            if service == "saver" {
+                item := items.NormalizedItem{}
+                err = proto.Unmarshal(msg.Body, &item)
+                if err != nil {
+                    panic("could not unmarshal normalized item: " + err.Error())
+                }
+                fmt.Printf("%+v\n", item)
+            } else {
+                item := items.Item{}
+                err = proto.Unmarshal(msg.Body, &item)
+                if err != nil {
+                    panic("could not unmarshal item: " + err.Error())
+                }
+                fmt.Printf("%+v\n", item)
             }
-
-            fmt.Printf("%+v\n", item)
-            return
         }
-    }(requeue)
 
-    time.Sleep(1 * time.Second)
+    }(service, quantity, requeue)
+
+    time.Sleep(100 * time.Millisecond)
 }
